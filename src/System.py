@@ -4,7 +4,6 @@ import dotenv
 import requests
 import re
 import html
-import Database
 
 
 def now() -> datetime:
@@ -15,20 +14,7 @@ def today() -> date:
     return date.today()
 
 
-def date_work() -> date:
-    workout_date = (Database.command(f'''SELECT date from System_time WHERE type='workout' ''')[0][0])
-    return workout_date
-
-
-def date_write(typ: str, add: int) -> None:
-    sql = f'''SELECT date from System_time WHERE type='{typ}' '''
-    get_date = (Database.command(sql)[0][0])
-    add = timedelta(days=add)
-    get_date += add
-    Database.command(f"UPDATE System_time SET date='{get_date}' WHERE type='{typ}'")
-
-
-def time_to_human(input_time: str) -> str:
+def time_to_human(input_time: int) -> str:
     seconds = int(input_time)
     periods = [
         ('month', 60 * 60 * 24 * 30),
@@ -57,6 +43,7 @@ def parse_url(url: str) -> str:
 
 
 def parse_page(url: str) -> tuple[str, str, int, list, int]:
+    # TODO edit for new site
     page_html = html.unescape(requests.get(url).text)
     name = re.findall("<title> (.*?) - AnimeDao</title>", page_html)[0]
     anime_type = re.findall('Status:</b></td><td class="align-middle">(.*?)</td>', page_html)[0]
@@ -67,9 +54,6 @@ def parse_page(url: str) -> tuple[str, str, int, list, int]:
     except IndexError:
         remain = "0"
     return name, anime_type, episode, remain, mal_link
-
-
-workout_begin = datetime(year=2023, month=1, day=1)
 
 
 def split_lines(data: str) -> str | list[str]:
@@ -93,5 +77,4 @@ def credentials(typ: str):
     return os.environ.get(typ)
 
 
-dotenv.load_dotenv("../Credentials.env")
-print("")
+dotenv.load_dotenv(verbose=True)

@@ -1,6 +1,5 @@
 from discord.ext import commands
 import discord
-import Workout
 import Anime
 import System
 import Notes
@@ -17,40 +16,7 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 @bot.event
 async def on_ready():
     print('Bot is ready')
-    Workout.check()
-    Notes.clear_due()
-
-
-@bot.command()
-async def w(ctx, *args):
-    await workout(ctx, *args)
-
-
-@bot.command()
-async def workout(ctx, *args):
-    try:
-        func = args[0]
-    except IndexError:
-        await ctx.send(Guide.workout_wrong_function)
-        return
-    if func == "sub":
-        if len(args) < 3:
-            await ctx.send(Guide.workout_sub_too_few)
-        elif len(args) > 3:
-            await ctx.send(Guide.workout_sub_too_many)
-        else:
-            option = args[1]
-            num = args[2]
-            remain = Workout.substract(option, num)
-            if remain == "":
-                await ctx.send(Guide.workout_sub_wrong_operation)
-            else:
-                await ctx.send(f"Substracted {num} points from {option}.\nNew value: {remain}")
-    elif func == "status" or func == "stat":
-        data = Workout.status()
-        await ctx.send(f"Remaining workout points:\n{data}")
-    else:
-        await ctx.send(Guide.workout_wrong_function)
+#    Notes.clear_due()
 
 
 @bot.command()

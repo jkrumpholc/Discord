@@ -6,3 +6,4 @@ __pycache__
 *.env
 Database_backup/
 Discord_venv
+.idea/
