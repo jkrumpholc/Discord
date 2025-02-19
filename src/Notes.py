@@ -13,18 +13,18 @@ def add_note(name: str, input_date: str, input_time: str, text: str) -> str | tu
     else:
         delta = timestamp - now
         sec = (delta.days * 86400) + delta.seconds
-    note = Database.command(f'''SELECT * FROM notes WHERE name='{name}' ''')
+    note = Database.db.command(f'''SELECT * FROM notes WHERE name='{name}' ''')
     if len(note) != 0:
         return f'Note {name} already exists.'
     else:
         input_date = datetime.strptime(input_date, '%d.%m.%Y').strftime('%Y-%m-%d')
-        Database.add_note(name, input_date, input_time, text, repeat='FALSE')
+        Database.db.add_note(name, input_date, input_time, text, repeat='FALSE')
         return f'Note {name} added\nNotification for note {name} has been set...\nRemaining time: ' \
                f'{System.time_to_human(sec)}', sec
 
 
 def show_note() -> str:
-    notes = Database.command('''SELECT * FROM notes''')
+    notes = Database.db.command('''SELECT * FROM notes''')
     if len(notes) == 0:
         return "No notes in database."
     else:
@@ -39,13 +39,13 @@ def show_note() -> str:
         return ret
 
 
-def delete_note(name: str) ->str:
-    Database.command(f'''DELETE FROM notes where name='{name}' ''')
+def delete_note(name: str) -> str:
+    Database.db.command(f'''DELETE FROM notes where name='{name}' ''')
     return f"Note {name} successfully deleted"
 
 
 def clear_due() -> None:
-    notes = Database.command('''SELECT * FROM notes''')
+    notes = Database.db.command('''SELECT * FROM notes''')
     for i in notes:
         if i[1] < datetime.time(System.now()) and i[2] == System.today() or i[2] < System.today():
-            Database.command(f'''DELETE FROM notes where name='{i[0]}' ''')
+            Database.db.command(f'''DELETE FROM notes where name='{i[0]}' ''')

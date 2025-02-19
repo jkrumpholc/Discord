@@ -1,136 +1,94 @@
 from datetime import *
 from mysql.connector import *
-from mysql.connector.cursor import MySQLCursor
-from mysql.connector.cursor_cext import CMySQLCursor
-from mysql.connector.pooling import PooledMySQLConnection
 import System
 
 
-def add_watching_anime(name: str, curr_ep: int, ep: int, url: str, mal_id: int) -> bool:
-    conn, cur = db_connect()
-    sql = f'''INSERT INTO anime_watching (name, current_ep, episodes, url, mal_id) VALUES
-    ("{name}", {curr_ep}, {ep}, "{url}", {mal_id})'''
-    try:
-        cur.execute(sql)
-        if add_anime_list(cur, name, mal_id, typ="finished"):
-            return True
-        return False
-    except (Exception, DatabaseError) as error:
-        print(error)
-        return False
-    finally:
-        disconnect(conn)
+class Database:
+    def __init__(self):
+        self.host = System.credentials("SQL_HOST")
+        self.password = System.credentials("SQL_PASSWORD")
+        self.database = System.credentials("SQL_DATABASE")
+        self.user = System.credentials("SQL_USER")
+        self.conn = connect(host=self.host, password=self.password, database=self.database, user=self.user)
+        self.cur = self.conn.cursor()
+        self.sql = ""
 
+    def __del__(self):
+        if self.conn is not None:
+            self.conn.commit()
+            self.conn.close()
 
-def add_ongoing_anime(url: str, name: str, ep: int, last: int, update_time: datetime, mal_id: int) -> bool:
-    conn, cur = db_connect()
-    sql = f'''INSERT INTO anime_ongoing (name, current_ep, latest_ep, update_time, url, mal_id)
-VALUES("{name}", {ep}, {last}, '{update_time}', "{url}", {mal_id})'''
-    try:
-        cur.execute(sql)
-        if add_anime_list(cur, name, mal_id, typ="ongoing"):
-            return True
-        return False
-    except (Exception, DatabaseError) as error:
-        print(error)
-        return False
-    finally:
-        disconnect(conn)
-
-
-def add_finished_anime(url: str, name: str, mal_id: int) -> bool:
-    conn, cur = db_connect()
-    sql = f'''INSERT INTO anime_finished (name, url, mal_id, finish_time) VALUES("{name}", "{url}", {mal_id}, {System.now()})'''
-    try:
-        cur.execute(sql)
-        return True
-    except (Exception, DatabaseError) as error:
-        print(error)
-        return False
-    finally:
-        disconnect(conn)
-
-
-def add_anime_list(cur: MySQLCursor | CMySQLCursor, name: str, mal_id: int, typ: str) -> bool:
-    sql = f'''INSERT INTO anime_list(name, type, mal_id) VALUES("{name}", "{typ}", {mal_id})'''
-    try:
-        cur.execute(sql)
-        return True
-    except (Exception, DatabaseError) as error:
-        print(error)
-        return False
-
-
-def get_anime_type(name: str) -> tuple[str, int]:
-    conn, cur = db_connect()
-    sql = f'''SELECT type, mal_id FROM anime_list where name LIKE "%{name}%"  '''
-    try:
-        cur.execute(sql)
-        ret = cur.fetchall()
-        if len(ret) != 0:
-            typ, mal_id = ret[0]
-            return typ, mal_id
-        disconnect(conn)
-    except (Exception, DatabaseError) as error:
-        print(error)
-        disconnect(conn)
-
-
-def get_anime(name: str) -> tuple[list | str, str, str | int]:
-    conn, cur = db_connect()
-    typ, mal_id = get_anime_type(name)
-    if typ == "ongoing":
-        sql = f'''SELECT name, current_ep, FROM anime_ongoing where mal_id = {mal_id} '''
-    elif typ == "finished":
-        sql = f'''SELECT name, current_ep FROM anime_watching where mal_id = {mal_id} '''
-    else:
-        return "", "", ""
-    cur.execute(sql)
-    ret = cur.fetchall()
-    disconnect(conn)
-    return ret, typ, mal_id
-
-
-def command(sql: str) -> list:
-    conn = ""
-    try:
-        conn, cur = db_connect()
-        cur.execute(sql)
+    def execute(self, fetch=False):
         try:
-            ret = cur.fetchall()
+            self.cur.execute(self.sql)
+            self.sql = ""
+            if fetch:
+                ret = self.cur.fetchall()
+                return ret
+        except (Exception, DatabaseError) as error:
+            print(error)
+            return False
+
+    def add_watching_anime(self, name: str, curr_ep: int, ep: int, mal_id: int) -> bool:
+        self.sql += f'''INSERT INTO anime_finished (id, num_episodes, watched_episodes) VALUES
+        ({mal_id}, {curr_ep}, {ep});'''
+        self.add_anime_list(name, mal_id, status="finished")
+        return True
+
+    def add_ongoing_anime(self, name: str, curr_ep: int, last_ep: int, update: datetime, mal_id: int) -> bool:
+        self.sql += f'''INSERT INTO anime_ongoing (id, num_episodes, watched_episodes, airing) VALUES
+        ({mal_id}, {last_ep}, {curr_ep}, '{update.strftime("%Y-%m-%d %H:%M:SS")}');'''
+        self.add_anime_list(name, mal_id, status="ongoing")
+        return True
+
+    def add_completed_anime(self, name: str, mal_id: int, date_time: date = System.today()) -> bool:
+        self.sql += f'''INSERT INTO anime_completed (id, finished) VALUES({mal_id}, '{date_time.strftime("%Y-%m-%d")}');'''
+        self.add_anime_list(name, mal_id, status="completed")
+        return True
+
+    def add_anime_list(self, name: str, mal_id: int, status: str) -> bool:
+        self.sql += f'''INSERT INTO anime_list(id, name, status) VALUES({mal_id}, "{name}", {status});'''
+        self.execute()
+        return True
+
+    def get_anime_type_name(self, name: str) -> tuple[int, str, str]:
+        self.sql += f'''SELECT id, name, status FROM anime_list where name LIKE "%{name}%"; '''
+        return self.execute(True)
+
+    def get_anime(self, name: str) -> list:
+        mal_id, name, status = self.get_anime_type_name(name)
+        if status == "ongoing":
+            self.sql += f'''SELECT num_episodes, watched_episodes, airing FROM anime_ongoing where id = {mal_id}; '''
+        elif status == "finished":
+            self.sql += f'''SELECT num_episodes, watched_episodes FROM anime_finished where id = {mal_id}; '''
+        elif status == "completed":
+            self.sql += f'''SELECT finished FROM anime_completed where id = {mal_id}; '''
+        else:
+            return []
+        return self.execute(True)
+
+    """def command(self, sql: str) -> list:
+        try:
+            self.cur.execute(sql)
+            try:
+                ret = self.cur.fetchall()
+            except ProgrammingError:
+                ret = ""
+            return ret
         except ProgrammingError:
-            ret = ""
-        return ret
-    except ProgrammingError:
-        exit(f"Wrong SQL request: {sql}")
-    except OperationalError:
-        exit("Cannot connect to database.")
-    finally:
-        disconnect(conn)
+            exit(f"Wrong SQL request: {sql}")
+        except OperationalError:
+            exit("Cannot connect to database.")"""
+
+    """def add_note(self, name: str, note_date: str, note_time: str, text: str, repeat: str) -> None:
+        sql = f'''INSERT INTO notes(name, date, time, repeat, text) VALUES('{name}', '{note_date}', '{note_time}', {repeat}, '{text}')'''
+        self.cur.execute(sql)
+
+    def add_repeat_note(self, name: str, note_time: datetime.time, text: str, interval: timedelta,
+                        repeat: bool) -> None:
+        sql = f'''INSERT INTO notes(name, time, repeat, every,text)VALUES('{name}','{note_time}',{repeat},{interval},'{text}')'''
+        self.cur.execute(sql)
+"""
 
 
-def add_note(name: str, note_date: str, note_time: str, text: str, repeat: str) -> None:
-    conn, cur = db_connect()
-    sql = f'''INSERT INTO notes(name, date, time, repeat, text) VALUES('{name}', '{note_date}', '{note_time}', {repeat}, '{text}')'''
-    cur.execute(sql)
-    disconnect(conn)
-
-
-def add_repeat_note(name: str, note_time: datetime.time, text: str, interval: timedelta, repeat: bool) -> None:
-    conn, cur = db_connect()
-    sql = f'''INSERT INTO notes(name, time, repeat, every,text)VALUES('{name}','{note_time}',{repeat},{interval},'{text}')'''
-    cur.execute(sql)
-    disconnect(conn)
-
-
-def db_connect() -> tuple[PooledMySQLConnection | MySQLConnection | CMySQLConnection, MySQLCursor | CMySQLCursor]:
-    conn = connect(host=System.credentials("SQL_HOST"), password=System.credentials("SQL_PASSWORD"),
-                   database=System.credentials("SQL_DATABASE"), user=System.credentials("SQL_USER"))
-    cur = conn.cursor()
-    return conn, cur
-
-
-def disconnect(conn: MySQLConnection) -> None:
-    conn.commit()
-    if conn is not None:
-        conn.close()
+db = Database()

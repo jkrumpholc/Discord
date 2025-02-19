@@ -19,7 +19,3 @@ anime_change_header = "Change airing hour of ongoing anime."
 anime_change = f"{anime_header}change [Name of anime] [New airing hour]"
 anime_wrong_function = "Wrong function\nAvailable: watched, add, add_going, finished, status, waiting, update, change" \
                        ",transfer"
-workout_sub_too_few = "Type of workout and number is needed."
-workout_sub_too_many = "Too many arguments."
-workout_sub_wrong_operation = "Wrong type of operation."
-workout_wrong_function = "Wrong function\nAvailable: sub, status"

@@ -11,12 +11,13 @@ def headers(auth: str = "basic") -> dict:
     return header
 
 
-def get_anime_list(url: str) -> list:
-    resp = requests.get(url, headers=headers())
+def get_anime_list(username: str) -> list:
+    url = f"https://api.myanimelist.net/v2/users/{username}/animelist?limit=1000&fields=title,end_date,num_episodes,status,my_list_status,broadcast"
+    resp = requests.get(url, headers=headers(auth="basic"))
     ret = resp.json()
     anime = []
     for i in ret["data"]:
-        anime.append(i["node"]["id"])
+        anime.append(i["node"])
     return anime
 
 
@@ -25,6 +26,13 @@ def find_anime(name: str, limit: int = 5) -> list:
     resp = requests.get(url, headers=headers(auth="advanced"))
     ret = resp.json()
     return ret["data"]
+
+
+def find_anime_id(id: int):
+    url = f"https://api.myanimelist.net/v2/anime/{id}?fields=title,end_date,status, my_list_status"
+    resp = requests.get(url, headers=headers(auth="advanced"))
+    ret = resp.json()
+    print(ret)
 
 
 def get_id_from_anime(anime: dict) -> int:

@@ -8,12 +8,12 @@ import Mal_Api
 def watched(name: str | tuple, add: int) -> str:
     if isinstance(name, tuple):
         name = " ".join(name)
-    ret, typ, mal_id = Database.get_anime(name)
+    ret = Database.db.get_anime(name)
     if len(ret) == 0:
         return f"Anime \"{name}\" not found."
+    elif len(ret) == 1:
+        return f"Anime \"{name}\" is already finished."
     else:
-        if isinstance(add, int):
-            return f"{add} is not a number."
         full_name, ep = ret[0]
         ep += + int(add)
         if typ == "ongoing":
@@ -22,7 +22,7 @@ def watched(name: str | tuple, add: int) -> str:
             sql = f'''UPDATE anime_watching SET current_ep = {ep} WHERE mal_id = {mal_id} '''
         else:
             return "Database Error."
-        Database.command(sql)
+        Database.db.command(sql)
         Mal_Api.update_anime(mal_id, f"num_watched_episodes={ep}")
         return f"Anime \"{full_name}\" updated."
 
@@ -32,11 +32,11 @@ def new_anime_going(url: str, mal_id: int, ep: int, last: int, update_time: date
         name = System.parse_url(url)
     elif isinstance(name, tuple):
         name = " ".join(name)
-    find = Database.command(f'''SELECT * FROM anime_list where mal_id = {mal_id} ''')
+    find = Database.db.command(f'''SELECT * FROM anime_list where mal_id = {mal_id} ''')
     if len(find) != 0:
         return f"Anime \"{name}\" already on list."
     else:
-        if Database.add_ongoing_anime(url, name, ep, last, update_time, mal_id):
+        if Database.db.add_ongoing_anime(url, name, ep, last, update_time, mal_id):
             return f"Anime \"{name}\" successfully added."
         return "Database error."
 
@@ -46,11 +46,11 @@ def new_anime(url: str, mal_id: int, ep: int, max_ep: int, name: str = None):
         name = System.parse_url(url)
     elif isinstance(name, tuple):
         name = " ".join(name)
-    find = Database.command(f'''SELECT * FROM anime_list where mal_id = {mal_id} ''')
+    find = Database.db.command(f'''SELECT * FROM anime_list where mal_id = {mal_id} ''')
     if len(find) != 0:
         return "Anime already on list."
     else:
-        if Database.add_watching_anime(name, ep, max_ep, url, mal_id):
+        if Database.db.add_watching_anime(name, ep, max_ep, url, mal_id):
             return f"Anime \"{name}\" successfully added."
         return "Database error."
 
@@ -72,10 +72,10 @@ def new_anime_url(url: str) -> str:
 def finished(name: str | tuple) -> str:
     if isinstance(name, tuple):
         name = " ".join(name)
-    typ, mal_id = Database.get_anime_type(name)
+    typ, mal_id = Database.db.get_anime_type(name)
     if len(typ) == 0:
         return "Anime not found."
-    data = Database.command(f'''SELECT * FROM anime_list where mal_id = {mal_id} ''')
+    data = Database.db.command(f'''SELECT * FROM anime_list where mal_id = {mal_id} ''')
     if len(data) > 0:
         data = data[0][0]
     if typ == "ongoing":
@@ -84,19 +84,19 @@ def finished(name: str | tuple) -> str:
         sql = f'''DELETE FROM anime_watching where mal_id = {mal_id} '''
     else:
         return f"Database Error: type: {typ}"
-    Database.command(sql)
-    Database.command(f'''DELETE FROM anime_list where mal_id = {mal_id} ''')
+    Database.db.command(sql)
+    Database.db.command(f'''DELETE FROM anime_list where mal_id = {mal_id} ''')
     return f"Anime \"{data}\" was removed from watchlist."
 
 
 def transfer(name: str | tuple) -> str:
     if isinstance(name, tuple):
         name = " ".join(name)
-    data = Database.command(f'''SELECT * FROM anime_ongoing where name LIKE "%{name}%" ''')
+    data = Database.db.command(f'''SELECT * FROM anime_ongoing where name LIKE "%{name}%" ''')
     if len(data) > 0:
         data = data[0]
         finished(name)
-        Database.add_watching_anime(data[0], data[1], data[2], data[4], data[5])
+        Database.db.add_watching_anime(data[0], data[1], data[2], data[4], data[5])
         return f"Anime \"{data[0]}\" transferred from ongoing to finished."
     else:
         return f"Anime \"{name}\" not found."
@@ -104,17 +104,17 @@ def transfer(name: str | tuple) -> str:
 
 def status() -> str:
     ret = ""
-    data_list = Database.command(f'''SELECT * FROM anime_watching ''')
+    data_list = Database.db.command(f'''SELECT * FROM anime_watching ''')
     for i in data_list:
         ret += f"Name: {i[0]}, Episode: {i[1]} out of {i[2]} \n"
-    data_list = Database.command(f'''SELECT * FROM anime_ongoing ORDER BY update_time''')
+    data_list = Database.db.command(f'''SELECT * FROM anime_ongoing ORDER BY update_time''')
     for i in data_list:
         ret += f"Name: {i[0]}, Episode: {i[1]}, Last episode: {i[2]}, Airing in {i[3].strftime('%A')} at {i[3].strftime('%H')}:00\n<{i[4]}>\n"
     return ret
 
 
 def waiting() -> str:
-    data_list = Database.command(
+    data_list = Database.db.command(
         f'''SELECT name, current_ep, latest_ep  FROM anime_ongoing WHERE latest_ep > current_ep''')
     ret = ""
     for i in data_list:
@@ -127,7 +127,7 @@ def waiting() -> str:
 def change_time(name: str | tuple, hour: time) -> str:
     if isinstance(name, tuple):
         name = " ".join(name)
-    Database.command(f'''UPDATE anime_ongoing SET update_time = {hour} WHERE name LIKE "%{name}%" ''')
+    Database.db.command(f'''UPDATE anime_ongoing SET update_time = {hour} WHERE name LIKE "%{name}%" ''')
     return f"Anime \"{name}\" update time set to {hour}:00"
 
 
@@ -135,7 +135,7 @@ def update() -> str:
     now = System.now()
     ret = ""
     day = (now + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
-    data_list = Database.command(f'''SELECT * FROM anime_ongoing WHERE update_time <= '{day}' ORDER BY update_time''')
+    data_list = Database.db.command(f'''SELECT * FROM anime_ongoing WHERE update_time <= '{day}' ORDER BY update_time''')
     for i in data_list:
         name, ep, latest, update_time, url, mal_id = i
         delta = (update_time - now).total_seconds()
@@ -164,5 +164,5 @@ def update() -> str:
             else:
                 append = "s" if diff > 1 else ""
                 ret += f"Anime \"{name}\" have {diff} new episode{append}.\n"
-            Database.command(f'''UPDATE anime_ongoing SET latest_ep = {latest} WHERE mal_id = {mal_id}''')
+            Database.db.command(f'''UPDATE anime_ongoing SET latest_ep = {latest} WHERE mal_id = {mal_id}''')
     return ret
